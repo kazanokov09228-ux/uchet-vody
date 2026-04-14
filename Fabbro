@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Учёт воды</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+:root {
+  --blue:#1a56db;--blue-l:#e8f0fe;--blue-d:#1239a5;
+  --green:#057a55;--green-l:#d5f0e8;
+  --red:#c81e1e;--red-l:#fde8e8;
+  --amber:#b45309;--amber-l:#fef3c7;
+  --purple:#6d28d9;--purple-l:#ede9fe;
+  --gray:#374151;--gray-l:#f3f4f6;--gray-m:#e5e7eb;
+  --white:#fff;--shadow:0 1px 4px rgba(0,0,0,.1);--r:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Arial,sans-serif;}
+body{background:#f0f4f8;color:var(--gray);font-size:14px;}
+
+.header{background:var(–blue);color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 6px rgba(0,0,0,.2);flex-wrap:wrap;gap:8px;}
+.header h1{font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+.nav{background:var(–white);border-bottom:2px solid var(–gray-m);display:flex;padding:0 16px;gap:2px;overflow-x:auto;}
+.nav-tab{padding:10px 16px;cursor:pointer;border-bottom:3px solid transparent;font-weight:500;color:#6b7280;white-space:nowrap;transition:all .2s;font-size:13px;}
+.nav-tab:hover{color:var(–blue);background:var(–blue-l);}
+.nav-tab.active{color:var(–blue);border-bottom-color:var(–blue);}
+
+.content{padding:16px;max-width:1500px;margin:0 auto;}
+
+.card{background:var(–white);border-radius:var(–r);box-shadow:var(–shadow);margin-bottom:14px;overflow:hidden;}
+.card-header{padding:9px 14px;font-weight:600;font-size:13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(–gray-m);}
+.ch-blue{background:var(–blue-l);color:var(–blue-d);}
+.ch-green{background:var(–green-l);color:#065f46;}
+.ch-purple{background:var(–purple-l);color:#5b21b6;}
+.ch-amber{background:var(–amber-l);color:#92400e;}
+.ch-red{background:var(–red-l);color:#9b1a1a;}
+.card-body{padding:12px 14px;}
+
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{background:var(–gray-l);padding:6px 7px;text-align:center;border:1px solid var(–gray-m);font-weight:600;font-size:12px;white-space:nowrap;}
+.tbl td{padding:4px 5px;border:1px solid var(–gray-m);text-align:center;}
+.tbl tr:hover td{background:#f9fafb;}
+.tbl .sc{background:#fffbeb;font-weight:600;}
+.tbl .sc-red{background:#fff1f2;font-weight:600;}
+.tbl tfoot td{background:var(–gray-l);font-weight:700;border-top:2px solid #9ca3af;}
+
+input[type=text],input[type=number],select{border:1px solid var(–gray-m);border-radius:4px;padding:4px 6px;font-size:13px;width:100%;background:var(–white);}
+input[type=number]{text-align:right;}
+input:focus,select:focus{outline:2px solid var(–blue);border-color:var(–blue);}
+
+.btn{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+.btn-primary{background:var(–blue);color:#fff;}.btn-primary:hover{background:var(–blue-d);}
+.btn-success{background:var(–green);color:#fff;}.btn-success:hover{background:#046047;}
+.btn-danger{background:var(–red);color:#fff;}.btn-danger:hover{background:#9b1a1a;}
+.btn-amber{background:var(–amber);color:#fff;}.btn-amber:hover{background:#92400e;}
+.btn-purple{background:var(–purple);color:#fff;}.btn-purple:hover{background:#5b21b6;}
+.btn-outline{background:transparent;border:1px solid var(–blue);color:var(–blue);}.btn-outline:hover{background:var(–blue-l);}
+.btn-sm{padding:3px 8px;font-size:12px;}
+.btn-xs{padding:2px 6px;font-size:11px;border-radius:4px;}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+
+.stat-card{background:var(–white);border-radius:var(–r);padding:12px;border-left:4px solid var(–blue);box-shadow:var(–shadow);}
+.stat-label{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;}
+.stat-value{font-size:20px;font-weight:700;color:var(–gray);margin-top:3px;}
+.stat-card.green{border-color:var(–green);}.stat-card.red{border-color:var(–red);}
+.stat-card.amber{border-color:var(–amber);}.stat-card.purple{border-color:var(–purple);}
+
+.driver-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;}
+.driver-tab{padding:5px 14px;border-radius:20px;cursor:pointer;font-size:13px;border:1.5px solid var(–gray-m);color:#6b7280;transition:all .2s;background:var(–white);}
+.driver-tab.active{background:var(–blue);color:#fff;border-color:var(–blue);}
+.driver-tab:hover:not(.active){border-color:var(–blue);color:var(–blue);}
+
+.sbadge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;}
+.bg{background:var(–green-l);color:var(–green);}.br{background:var(–red-l);color:var(–red);}
+.ba{background:var(–amber-l);color:var(–amber);}.bp{background:var(–purple-l);color:var(–purple);}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(–white);border-radius:10px;padding:20px;max-width:560px;width:94%;box-shadow:0 10px 40px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto;}
+.modal h3{margin-bottom:14px;font-size:15px;}
+.fg{margin-bottom:10px;}
+.fg label{display:block;font-size:12px;font-weight:500;margin-bottom:3px;color:#6b7280;}
+
+.total-box{border-radius:var(–r);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:10px;}
+.tl{font-size:12px;opacity:.85;}.tv{font-size:24px;font-weight:700;}
+
+.bottles-row{display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;}
+.bf{display:flex;align-items:center;gap:7px;background:var(–blue-l);padding:7px 12px;border-radius:20px;}
+.bf label{font-size:12px;color:var(–blue-d);font-weight:500;white-space:nowrap;}
+.bf input{width:75px;background:var(–white);}
+.bf.amber{background:var(–amber-l);}.bf.amber label{color:#92400e;}
+
+.date-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+
+.tpl-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid var(–gray-m);border-radius:6px;margin-bottom:6px;background:var(–gray-l);}
+.tpl-name{font-weight:600;font-size:13px;}.tpl-detail{font-size:11px;color:#6b7280;margin-top:2px;}
+.tpl-actions{display:flex;gap:5px;flex-shrink:0;}
+
+.add-tpl-btn{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(–gray-l);border:1.5px dashed var(–gray-m);border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;transition:all .2s;width:100%;justify-content:center;}
+.add-tpl-btn:hover{border-color:var(–blue);color:var(–blue);background:var(–blue-l);}
+
+.table-wrap{overflow-x:auto;}
+.hidden{display:none!important;}
+hr.sep{border:none;border-top:1px dashed var(–gray-m);margin:10px 0;}
+
+@media(max-width:768px){.g2,.g4{grid-template-columns:1fr;}.content{padding:10px;}}
+</style>
+
+</head>
+<body>
+
+<div class="header">
+  <h1>💧 Учёт воды</h1>
+  <div class="header-actions">
+    <select id="globalMonth" onchange="changeMonth()" style="background:#fff;color:#1a56db;border:none;border-radius:6px;padding:5px 10px;font-weight:600;cursor:pointer;"></select>
+    <button class="btn btn-purple" onclick="showPage('templates')">📋 Шаблоны</button>
+    <button class="btn btn-success" onclick="exportToExcel()">📊 Excel</button>
+    <button class="btn btn-outline" style="color:#fff;border-color:#fff;" onclick="openAddDriverModal()">+ Водитель</button>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="nav-tab active" onclick="showPage('summary')" data-page="summary">📊 Сводная</div>
+  <div class="nav-tab" onclick="showPage('daily')" data-page="daily">📅 Ежедневный учёт</div>
+  <div class="nav-tab" onclick="showPage('templates')" data-page="templates">📋 Шаблоны</div>
+</div>
+
+<div class="content">
+
+<!-- SUMMARY -->
+
+<div id="page-summary">
+  <div class="g4" id="summaryStats" style="margin-bottom:14px;"></div>
+  <div class="card">
+    <div class="card-header ch-blue">
+      📊 Сводная по водителям — <span id="summaryMonthLabel"></span>
+      <button class="btn btn-outline btn-sm" onclick="renderSummary()">↻ Обновить</button>
+    </div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th>Водитель</th><th>Дней</th><th>Куплено бут.</th><th>Обменяно бут.</th>
+            <th>Продажи (₽)</th><th>Закупка (₽)</th><th>Расходы вод. (₽)</th>
+            <th>Непредвид. (₽)</th><th>ЗП (₽)</th><th>Итог (₽)</th>
+          </tr></thead>
+          <tbody id="summaryBody"></tbody>
+          <tfoot id="summaryFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DAILY -->
+
+<div id="page-daily" class="hidden">
+  <div class="date-row">
+    <label style="font-weight:600;">📅 Дата:</label>
+    <input type="date" id="currentDate" onchange="loadDayData()" style="width:155px;">
+    <button class="btn btn-primary btn-sm" onclick="prevDay()">◀</button>
+    <button class="btn btn-primary btn-sm" onclick="nextDay()">▶</button>
+    <span id="dayLabel" style="font-weight:600;color:var(--blue);font-size:13px;"></span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+    <span style="font-weight:600;font-size:13px;">Водитель:</span>
+    <div class="driver-tabs" id="driverTabs"></div>
+  </div>
+
+  <div class="bottles-row">
+    <div class="bf"><label>🛒 Куплено бутылок:</label><input type="number" id="bottlesBought" min="0" value="0" onchange="saveDayData()"></div>
+    <div class="bf"><label>🔄 Обменяно бутылок:</label><input type="number" id="bottlesExchanged" min="0" value="0" onchange="saveDayData()"></div>
+    <div class="bf amber"><label>% ЗП водителя:</label><input type="number" id="salaryPct" min="0" max="100" value="10" step="0.1" onchange="saveDayData()"><span style="font-size:12px;font-weight:700;color:#92400e;">%</span></div>
+  </div>
+
+  <!-- SALES -->
+
+  <div class="card">
+    <div class="card-header ch-blue">
+      💰 Продажи воды
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" onclick="openTplPicker('sales')">📋 Из шаблона</button>
+        <button class="btn btn-primary btn-sm" onclick="addRow('sales')">+ Строка</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>#</th><th style="min-width:145px;">Наименование</th><th style="min-width:85px;">Цена (₽)</th><th style="min-width:85px;">Наценка (₽)</th><th style="min-width:75px;">Кол-во</th><th class="sc" style="min-width:100px;">Сумма (₽)</th><th style="width:32px;"></th></tr></thead>
+          <tbody id="salesBody"></tbody>
+          <tfoot><tr><td colspan="5" style="text-align:right;padding-right:8px;font-size:12px;">ИТОГО:</td><td class="sc" id="salesTotalCell">0 ₽</td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PURCHASE -->
+
+  <div class="card">
+    <div class="card-header ch-green">
+      📦 Закупка воды
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-outline btn-sm" onclick="openTplPicker('purchase')">📋 Из шаблона</button>
+        <button class="btn btn-success btn-sm" onclick="addRow('purchase')">+ Строка</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table class="tbl">
+          <thead><tr><th>#</th><th style="min-width:145px;">Наименование</th><th style="min-width:85px;">Цена (₽)</th><th style="min-width:85px;">Наценка (₽)</th><th style="min-width:75px;">Кол-во</th><th class="sc-red" style="min-width:100px;">Сумма (₽)</th><th style="width:32px;"></th></tr></thead>
+          <tbody id="purchaseBody"></tbody>
+          <tfoot><tr><td colspan="5" style="text-align:right;padding-right:8px;font-size:12px;">ИТОГО:</td><td class="sc-red" id="purchaseTotalCell">0 ₽</td><td></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPENSES -->
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-header ch-amber">
+        🚗 Расходы водителя
+        <button class="btn btn-amber btn-sm" onclick="addExpRow('driverExpBody')">+ Строка</button>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead><tr><th>#</th><th>Наименование</th><th>Сумма (₽)</th><th></th></tr></thead>
+            <tbody id="driverExpBody"></tbody>
+            <tfoot><tr><td colspan="2" style="text-align:right;padding-right:8px;">ИТОГО:</td><td id="driverExpTotal">0 ₽</td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header ch-red">
+        ⚠️ Непредвиденные расходы
+        <button class="btn btn-danger btn-sm" onclick="addExpRow('miscExpBody')">+ Строка</button>
+      </div>
+      <div class="card-body">
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead><tr><th>#</th><th>Наименование</th><th>Сумма (₽)</th><th></th></tr></thead>
+            <tbody id="miscExpBody"></tbody>
+            <tfoot><tr><td colspan="2" style="text-align:right;padding-right:8px;">ИТОГО:</td><td id="miscExpTotal">0 ₽</td><td></td></tr></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="g4" id="dayStatCards" style="margin-bottom:10px;"></div>
+  <div class="total-box" id="dailyTotalBox" style="background:linear-gradient(135deg,#057a55,#046047);color:#fff;">
+    <div><div class="tl">ИТОГ ЗА ДЕНЬ (Продажи − Закупка − ЗП − Расходы)</div><div class="tv" id="dailyFinal">0 ₽</div></div>
+    <div style="text-align:right;"><div class="tl">Всего расходов</div><div class="tv" id="dailyExpTotal">0 ₽</div></div>
+  </div>
+</div>
+
+<!-- TEMPLATES -->
+
+<div id="page-templates" class="hidden">
+  <div class="g2">
+    <div class="card">
+      <div class="card-header ch-blue">
+        💰 Шаблоны продажи
+        <button class="btn btn-primary btn-sm" onclick="openCreateTpl('sales')">+ Создать</button>
+      </div>
+      <div class="card-body" id="salesTplList"></div>
+    </div>
+    <div class="card">
+      <div class="card-header ch-green">
+        📦 Шаблоны закупки
+        <button class="btn btn-success btn-sm" onclick="openCreateTpl('purchase')">+ Создать</button>
+      </div>
+      <div class="card-body" id="purchaseTplList"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- MODAL: ADD DRIVER -->
+
+<div class="modal-overlay" id="modalDriver">
+  <div class="modal">
+    <h3>➕ Добавить водителя</h3>
+    <div class="fg"><label>Имя водителя</label><input type="text" id="newDriverName" placeholder="Например: Иван"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+      <button class="btn btn-outline" onclick="closeModal('modalDriver')">Отмена</button>
+      <button class="btn btn-primary" onclick="addDriver()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CREATE/EDIT TEMPLATE -->
+
+<div class="modal-overlay" id="modalCreateTpl">
+  <div class="modal">
+    <h3 id="createTplTitle">Создать шаблон</h3>
+    <input type="hidden" id="tplEditType">
+    <input type="hidden" id="tplEditIdx" value="-1">
+    <div class="fg"><label>Название шаблона</label><input type="text" id="tplName" placeholder="Например: Стандартный набор"></div>
+    <hr class="sep">
+    <div style="font-weight:600;font-size:12px;margin-bottom:8px;color:#6b7280;">ПОЗИЦИИ ШАБЛОНА (цена и наценка; количество вводится при добавлении)</div>
+    <div class="table-wrap">
+      <table class="tbl" style="margin-bottom:8px;">
+        <thead><tr><th style="min-width:160px;">Наименование</th><th style="min-width:80px;">Цена (₽)</th><th style="min-width:80px;">Наценка (₽)</th><th style="width:32px;"></th></tr></thead>
+        <tbody id="tplRows"></tbody>
+      </table>
+    </div>
+    <button class="add-tpl-btn" onclick="addTplRow()">+ Добавить строку</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-outline" onclick="closeModal('modalCreateTpl')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: PICK TEMPLATE -->
+
+<div class="modal-overlay" id="modalPickTpl">
+  <div class="modal">
+    <h3 id="pickTplTitle">Выбрать шаблон</h3>
+    <input type="hidden" id="pickTplType">
+    <div id="pickTplList"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button class="btn btn-outline" onclick="closeModal('modalPickTpl')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====================== FIREBASE ======================
+const firebaseConfig = {
+  apiKey: "AIzaSyBIcptkO0Ff8UPwoXzTc82RlBchKVIjhUI",
+  authDomain: "uchet-vody.firebaseapp.com",
+  databaseURL: "https://uchet-vody-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "uchet-vody",
+  storageBucket: "uchet-vody.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "uchet-vody-app"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const ROOT = 'waterApp';
+
+// ====================== STATE ======================
+let S = {
+  drivers: ['Водитель 1'],
+  data: {},
+  templates: { sales: [], purchase: [] }
+};
+let curDriver = 0;
+let saveTimer = null;
+let isLoading = false;
+
+// ====================== INIT ======================
+function init() {
+  fillMonthSelect();
+  const today = new Date();
+  document.getElementById('currentDate').value = dateFmt(today);
+  setDayLabel(today);
+  showSyncStatus('loading');
+
+  // Load all data from Firebase once, then subscribe to live updates
+  db.ref(ROOT).on('value', snap => {
+    const val = snap.val();
+    if (val) {
+      S = val;
+      if (!S.templates) S.templates = { sales: [], purchase: [] };
+      if (!S.data) S.data = {};
+      if (!S.drivers || !S.drivers.length) S.drivers = ['Водитель 1'];
+    }
+    isLoading = false;
+    renderDriverTabs();
+    loadDayData();
+    if (document.getElementById('page-summary') && !document.getElementById('page-summary').classList.contains('hidden')) {
+      renderSummary();
+    }
+    if (document.getElementById('page-templates') && !document.getElementById('page-templates').classList.contains('hidden')) {
+      renderTplLists();
+    }
+    showSyncStatus('ok');
+  }, err => {
+    showSyncStatus('error');
+    console.error('Firebase error:', err);
+    // Fallback to localStorage
+    const local = JSON.parse(localStorage.getItem('waterApp4') || 'null');
+    if (local) { S = local; if (!S.templates) S.templates={sales:[],purchase:[]}; }
+    renderDriverTabs();
+    loadDayData();
+    showPage('summary');
+  });
+
+  showPage('summary');
+}
+
+function showSyncStatus(status) {
+  let el = document.getElementById('syncStatus');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'syncStatus';
+    el.style.cssText = 'font-size:11px;padding:3px 10px;border-radius:12px;font-weight:600;';
+    document.querySelector('.header-actions').prepend(el);
+  }
+  if (status === 'loading') { el.textContent = '⏳ Загрузка...'; el.style.background='rgba(255,255,255,.2)'; el.style.color='#fff'; }
+  else if (status === 'ok')  { el.textContent = '☁️ Синхронизировано'; el.style.background='rgba(5,122,85,.8)'; el.style.color='#fff'; }
+  else if (status === 'saving') { el.textContent = '💾 Сохранение...'; el.style.background='rgba(180,83,9,.8)'; el.style.color='#fff'; }
+  else if (status === 'error') { el.textContent = '⚠️ Офлайн (локально)'; el.style.background='rgba(200,30,30,.8)'; el.style.color='#fff'; }
+}
+
+function dateFmt(d) { return d.toISOString().split('T')[0]; }
+function escQ(s) { return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function fillMonthSelect() {
+  const sel = document.getElementById('globalMonth');
+  sel.innerHTML = '';
+  const now = new Date();
+  for (let i = 0; i < 18; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = d.toLocaleString('ru', {month:'long', year:'numeric'});
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  updateMonthLabel();
+}
+
+function changeMonth() { renderSummary(); updateMonthLabel(); }
+function getMonth() { return document.getElementById('globalMonth').value; }
+function updateMonthLabel() {
+  const [y,m] = getMonth().split('-');
+  document.getElementById('summaryMonthLabel').textContent =
+    new Date(y, m-1, 1).toLocaleString('ru', {month:'long', year:'numeric'});
+}
+
+// ====================== PAGES ======================
+function showPage(name) {
+  ['summary','daily','templates'].forEach(p => {
+    document.getElementById('page-'+p).classList.toggle('hidden', p !== name);
+    const t = document.querySelector(`.nav-tab[data-page="${p}"]`);
+    if (t) t.classList.toggle('active', p === name);
+  });
+  if (name === 'summary') renderSummary();
+  if (name === 'templates') renderTplLists();
+}
+
+// ====================== DRIVERS ======================
+function renderDriverTabs() {
+  const c = document.getElementById('driverTabs');
+  c.innerHTML = '';
+  S.drivers.forEach((n, i) => {
+    const b = document.createElement('button');
+    b.className = 'driver-tab' + (i === curDriver ? ' active' : '');
+    b.textContent = n;
+    b.onclick = () => { curDriver = i; renderDriverTabs(); loadDayData(); };
+    c.appendChild(b);
+  });
+}
+function openAddDriverModal() {
+  document.getElementById('newDriverName').value = '';
+  openModal('modalDriver');
+}
+function addDriver() {
+  const n = document.getElementById('newDriverName').value.trim();
+  if (!n) return alert('Введите имя водителя');
+  S.drivers.push(n);
+  save();
+  renderDriverTabs();
+  closeModal('modalDriver');
+}
+
+// ====================== DAY DATA ======================
+function getDayStr() { return document.getElementById('currentDate').value; }
+function moOf(ds) { return ds.substring(0,7); }
+function ddOf(ds) { return ds.substring(8,10); }
+function emptyDay() {
+  return { bottlesBought:0, bottlesExchanged:0, salaryPct:10,
+           sales:[], purchase:[], driverExp:[], miscExp:[] };
+}
+
+function loadDayData() {
+  const ds = getDayStr();
+  setDayLabel(new Date(ds+'T00:00:00'));
+  const rec = S.data[moOf(ds)]?.[ddOf(ds)]?.[curDriver] || emptyDay();
+  document.getElementById('bottlesBought').value = rec.bottlesBought||0;
+  document.getElementById('bottlesExchanged').value = rec.bottlesExchanged||0;
+  document.getElementById('salaryPct').value = rec.salaryPct??10;
+  renderTable('salesBody', rec.sales||[], 'sales');
+  renderTable('purchaseBody', rec.purchase||[], 'purchase');
+  renderExpRows('driverExpBody', rec.driverExp||[]);
+  renderExpRows('miscExpBody', rec.miscExp||[]);
+  recalc();
+}
+
+function saveDayData() {
+  const ds = getDayStr(), mo = moOf(ds), dd = ddOf(ds);
+  if (!S.data[mo]) S.data[mo] = {};
+  if (!S.data[mo][dd]) S.data[mo][dd] = {};
+  S.data[mo][dd][curDriver] = {
+    bottlesBought: +document.getElementById('bottlesBought').value||0,
+    bottlesExchanged: +document.getElementById('bottlesExchanged').value||0,
+    salaryPct: +document.getElementById('salaryPct').value||0,
+    sales: readTable('salesBody'),
+    purchase: readTable('purchaseBody'),
+    driverExp: readExpRows('driverExpBody'),
+    miscExp: readExpRows('miscExpBody')
+  };
+  save();
+  recalc();
+}
+
+function save() {
+  // Save to localStorage as backup
+  localStorage.setItem('waterApp4', JSON.stringify(S));
+  // Debounce Firebase save to avoid too many writes while typing
+  showSyncStatus('saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    db.ref(ROOT).set(S)
+      .then(() => showSyncStatus('ok'))
+      .catch(err => { console.error('Save error:', err); showSyncStatus('error'); });
+  }, 800);
+}
+
+// ====================== PRODUCT TABLE ======================
+function renderTable(tbodyId, rows, type) {
+  const tb = document.getElementById(tbodyId);
+  tb.innerHTML = '';
+  const sumClass = type === 'purchase' ? 'sc-red' : 'sc';
+  const prefix = type === 'purchase' ? 'p' : 's';
+  rows.forEach((r,i) => {
+    const sum = ((r.price||0)+(r.markup||0))*(r.qty||0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:#9ca3af;font-size:11px;">${i+1}</td>
+      <td><input type="text" value="${escQ(r.name)}" onchange="saveDayData()"></td>
+      <td><input type="number" value="${r.price||0}" min="0" onchange="saveDayData()"></td>
+      <td><input type="number" value="${r.markup||0}" min="0" onchange="saveDayData()"></td>
+      <td><input type="number" value="${r.qty||0}" min="0" onchange="saveDayData()"></td>
+      <td class="${sumClass}" id="${prefix}s${i}">${fmtR(sum)}</td>
+      <td><button class="btn btn-danger btn-xs" onclick="removeRow('${tbodyId}','${type}',${i})">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function readTable(tbodyId) {
+  return Array.from(document.querySelectorAll(`#${tbodyId} tr`)).map(tr => {
+    const ins = tr.querySelectorAll('input');
+    return {name:ins[0].value, price:+ins[1].value||0, markup:+ins[2].value||0, qty:+ins[3].value||0};
+  });
+}
+
+function addRow(type) {
+  const id = type === 'sales' ? 'salesBody' : 'purchaseBody';
+  const rows = readTable(id);
+  rows.push({name:'', price:0, markup:0, qty:0});
+  renderTable(id, rows, type);
+  saveDayData();
+}
+
+function removeRow(tbodyId, type, i) {
+  const rows = readTable(tbodyId);
+  rows.splice(i, 1);
+  renderTable(tbodyId, rows, type);
+  saveDayData();
+}
+
+// ====================== EXP ROWS ======================
+function renderExpRows(tbodyId, rows) {
+  const tb = document.getElementById(tbodyId);
+  tb.innerHTML = '';
+  rows.forEach((r,i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:#9ca3af;font-size:11px;">${i+1}</td>
+      <td><input type="text" value="${escQ(r.name)}" onchange="saveDayData()"></td>
+      <td><input type="number" value="${r.amount||0}" min="0" onchange="saveDayData()"></td>
+      <td><button class="btn btn-danger btn-xs" onclick="removeExpRow('${tbodyId}',${i})">✕</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function readExpRows(tbodyId) {
+  return Array.from(document.querySelectorAll(`#${tbodyId} tr`)).map(tr => {
+    const ins = tr.querySelectorAll('input');
+    return {name:ins[0].value, amount:+ins[1].value||0};
+  });
+}
+
+function addExpRow(tbodyId) {
+  const rows = readExpRows(tbodyId);
+  rows.push({name:'', amount:0});
+  renderExpRows(tbodyId, rows);
+  saveDayData();
+}
+
+function removeExpRow(tbodyId, i) {
+  const rows = readExpRows(tbodyId);
+  rows.splice(i, 1);
+  renderExpRows(tbodyId, rows);
+  saveDayData();
+}
+
+// ====================== RECALC ======================
+function fmtR(n) { return Math.round(n).toLocaleString('ru') + ' ₽'; }
+function fmtN(n) { return Math.round(n).toLocaleString('ru'); }
+
+function recalc() {
+  const sales = readTable('salesBody');
+  let salesTotal = 0;
+  sales.forEach((r,i) => {
+    const s = (r.price+r.markup)*r.qty; salesTotal += s;
+    const c = document.getElementById('ss'+i); if (c) c.textContent = fmtR(s);
+  });
+  document.getElementById('salesTotalCell').textContent = fmtR(salesTotal);
+
+  const purchases = readTable('purchaseBody');
+  let purchaseTotal = 0;
+  purchases.forEach((r,i) => {
+    const s = (r.price+r.markup)*r.qty; purchaseTotal += s;
+    const c = document.getElementById('ps'+i); if (c) c.textContent = fmtR(s);
+  });
+  document.getElementById('purchaseTotalCell').textContent = fmtR(purchaseTotal);
+
+  const drvExp = readExpRows('driverExpBody').reduce((s,r)=>s+r.amount, 0);
+  const miscExp = readExpRows('miscExpBody').reduce((s,r)=>s+r.amount, 0);
+  document.getElementById('driverExpTotal').textContent = fmtR(drvExp);
+  document.getElementById('miscExpTotal').textContent = fmtR(miscExp);
+
+  const pct = +document.getElementById('salaryPct').value||0;
+  const salary = salesTotal * pct / 100;
+  const totalExp = drvExp + miscExp;
+  const profit = salesTotal - purchaseTotal - salary - totalExp;
+
+  document.getElementById('dayStatCards').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Продажи</div><div class="stat-value" style="font-size:17px;">${fmtR(salesTotal)}</div></div>
+    <div class="stat-card red"><div class="stat-label">Закупка</div><div class="stat-value" style="font-size:17px;">${fmtR(purchaseTotal)}</div></div>
+    <div class="stat-card amber"><div class="stat-label">ЗП вод. (${pct}%)</div><div class="stat-value" style="font-size:17px;">${fmtR(salary)}</div></div>
+    <div class="stat-card purple"><div class="stat-label">Расходы</div><div class="stat-value" style="font-size:17px;">${fmtR(totalExp)}</div></div>`;
+
+  document.getElementById('dailyFinal').textContent = fmtR(profit);
+  document.getElementById('dailyExpTotal').textContent = fmtR(totalExp);
+  document.getElementById('dailyTotalBox').style.background = profit >= 0
+    ? 'linear-gradient(135deg,#057a55,#046047)'
+    : 'linear-gradient(135deg,#c81e1e,#9b1a1a)';
+}
+
+// ====================== SUMMARY ======================
+function renderSummary() {
+  updateMonthLabel();
+  const mo = getMonth(), moData = S.data[mo]||{};
+  const stats = S.drivers.map((name,di) => {
+    let days=0,bought=0,exch=0,salesT=0,purchaseT=0,drvExp=0,miscExp=0,salary=0;
+    Object.values(moData).forEach(dayObj => {
+      const r = dayObj[di]; if (!r) return;
+      const st = (r.sales||[]).reduce((s,p)=>s+(p.price+p.markup)*p.qty, 0);
+      const pt = (r.purchase||[]).reduce((s,p)=>s+(p.price+p.markup)*p.qty, 0);
+      if (st > 0 || (r.bottlesBought||0) > 0) days++;
+      bought += r.bottlesBought||0; exch += r.bottlesExchanged||0;
+      salesT += st; purchaseT += pt;
+      drvExp += (r.driverExp||[]).reduce((s,e)=>s+e.amount, 0);
+      miscExp += (r.miscExp||[]).reduce((s,e)=>s+e.amount, 0);
+      salary += st * (r.salaryPct||10) / 100;
+    });
+    const profit = salesT - purchaseT - salary - drvExp - miscExp;
+    return {name,days,bought,exch,salesT,purchaseT,drvExp,miscExp,salary,profit};
+  });
+
+  const tS = stats.reduce((s,d)=>s+d.salesT,0);
+  const tP = stats.reduce((s,d)=>s+d.purchaseT,0);
+  const tSal = stats.reduce((s,d)=>s+d.salary,0);
+  const tProfit = stats.reduce((s,d)=>s+d.profit,0);
+
+  document.getElementById('summaryStats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Продажи</div><div class="stat-value">${fmtR(tS)}</div></div>
+    <div class="stat-card red"><div class="stat-label">Закупка</div><div class="stat-value">${fmtR(tP)}</div></div>
+    <div class="stat-card amber"><div class="stat-label">Зарплаты</div><div class="stat-value">${fmtR(tSal)}</div></div>
+    <div class="stat-card green"><div class="stat-label">Чистая прибыль</div><div class="stat-value">${fmtR(tProfit)}</div></div>`;
+
+  const tbody = document.getElementById('summaryBody');
+  tbody.innerHTML = '';
+  stats.forEach(d => {
+    const pb = d.profit >= 0 ? `<span class="sbadge bg">${fmtR(d.profit)}</span>` : `<span class="sbadge br">${fmtR(d.profit)}</span>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:600;text-align:left;">${escQ(d.name)}</td>
+      <td>${d.days}</td><td>${fmtN(d.bought)}</td><td>${fmtN(d.exch)}</td>
+      <td style="font-weight:600;">${fmtR(d.salesT)}</td>
+      <td>${fmtR(d.purchaseT)}</td><td>${fmtR(d.drvExp)}</td><td>${fmtR(d.miscExp)}</td>
+      <td><span class="sbadge ba">${fmtR(d.salary)}</span></td><td>${pb}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('summaryFoot').innerHTML = `<tr>
+    <td style="font-weight:700;text-align:left;">ИТОГО</td><td></td>
+    <td>${fmtN(stats.reduce((s,d)=>s+d.bought,0))}</td>
+    <td>${fmtN(stats.reduce((s,d)=>s+d.exch,0))}</td>
+    <td style="font-weight:700;">${fmtR(tS)}</td>
+    <td>${fmtR(tP)}</td>
+    <td>${fmtR(stats.reduce((s,d)=>s+d.drvExp,0))}</td>
+    <td>${fmtR(stats.reduce((s,d)=>s+d.miscExp,0))}</td>
+    <td>${fmtR(tSal)}</td>
+    <td style="font-weight:700;color:${tProfit>=0?'var(--green)':'var(--red)'};">${fmtR(tProfit)}</td>
+  </tr>`;
+}
+
+// ====================== TEMPLATES ======================
+function renderTplLists() {
+  renderOneTplList('salesTplList', 'sales');
+  renderOneTplList('purchaseTplList', 'purchase');
+}
+
+function renderOneTplList(containerId, type) {
+  const cont = document.getElementById(containerId);
+  const tpls = S.templates[type]||[];
+  if (!tpls.length) {
+    cont.innerHTML = '<div style="text-align:center;color:#9ca3af;padding:24px;font-size:13px;">Шаблонов нет. Нажмите «+ Создать»</div>';
+    return;
+  }
+  cont.innerHTML = '';
+  tpls.forEach((tpl, i) => {
+    const preview = tpl.rows.slice(0,3).map(r=>r.name||'—').join(', ') + (tpl.rows.length>3 ? '…' : '');
+    const div = document.createElement('div');
+    div.className = 'tpl-item';
+    div.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        <div class="tpl-name">${escQ(tpl.name)}</div>
+        <div class="tpl-detail">${tpl.rows.length} позиций: ${escQ(preview)}</div>
+      </div>
+      <div class="tpl-actions">
+        <button class="btn btn-outline btn-sm" onclick="openEditTpl('${type}',${i})">✏️ Изменить</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteTpl('${type}',${i})">✕</button>
+      </div>`;
+    cont.appendChild(div);
+  });
+}
+
+function openCreateTpl(type) {
+  document.getElementById('tplEditType').value = type;
+  document.getElementById('tplEditIdx').value = -1;
+  document.getElementById('tplName').value = '';
+  document.getElementById('createTplTitle').textContent =
+    type === 'sales' ? '💰 Новый шаблон продажи' : '📦 Новый шаблон закупки';
+  document.getElementById('tplRows').innerHTML = '';
+  addTplRow();
+  openModal('modalCreateTpl');
+}
+
+function openEditTpl(type, idx) {
+  const tpl = S.templates[type][idx];
+  document.getElementById('tplEditType').value = type;
+  document.getElementById('tplEditIdx').value = idx;
+  document.getElementById('tplName').value = tpl.name;
+  document.getElementById('createTplTitle').textContent = '✏️ Редактировать шаблон';
+  const tb = document.getElementById('tplRows'); tb.innerHTML = '';
+  tpl.rows.forEach(r => addTplRow(r));
+  openModal('modalCreateTpl');
+}
+
+function addTplRow(r) {
+  r = r || {name:'', price:0, markup:0};
+  const tb = document.getElementById('tplRows');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" value="${escQ(r.name)}" placeholder="Наименование товара"></td>
+    <td><input type="number" value="${r.price||0}" min="0"></td>
+    <td><input type="number" value="${r.markup||0}" min="0"></td>
+    <td><button class="btn btn-danger btn-xs" onclick="this.closest('tr').remove()">✕</button></td>`;
+  tb.appendChild(tr);
+}
+
+function saveTemplate() {
+  const name = document.getElementById('tplName').value.trim();
+  if (!name) return alert('Введите название шаблона');
+  const type = document.getElementById('tplEditType').value;
+  const idx = +document.getElementById('tplEditIdx').value;
+  const rows = Array.from(document.querySelectorAll('#tplRows tr')).map(tr => {
+    const ins = tr.querySelectorAll('input');
+    return {name:ins[0].value.trim(), price:+ins[1].value||0, markup:+ins[2].value||0};
+  }).filter(r => r.name);
+  if (!rows.length) return alert('Добавьте хотя бы одну позицию с наименованием');
+  const tpl = {name, rows};
+  if (idx >= 0) S.templates[type][idx] = tpl;
+  else S.templates[type].push(tpl);
+  save();
+  renderTplLists();
+  closeModal('modalCreateTpl');
+}
+
+function deleteTpl(type, idx) {
+  if (!confirm('Удалить шаблон "' + S.templates[type][idx].name + '"?')) return;
+  S.templates[type].splice(idx, 1);
+  save();
+  renderTplLists();
+}
+
+// Apply template to daily table
+function openTplPicker(type) {
+  const tpls = S.templates[type]||[];
+  document.getElementById('pickTplType').value = type;
+  document.getElementById('pickTplTitle').textContent =
+    type === 'sales' ? '💰 Шаблоны продажи' : '📦 Шаблоны закупки';
+  const list = document.getElementById('pickTplList');
+  if (!tpls.length) {
+    list.innerHTML = `<div style="color:#9ca3af;text-align:center;padding:20px;font-size:13px;">
+      Нет шаблонов.<br>Создайте их в разделе «Шаблоны» (кнопка вверху)</div>`;
+  } else {
+    list.innerHTML = '';
+    tpls.forEach((tpl, i) => {
+      const div = document.createElement('div');
+      div.className = 'tpl-item';
+      div.innerHTML = `
+        <div style="flex:1;">
+          <div class="tpl-name">${escQ(tpl.name)}</div>
+          <div class="tpl-detail">${tpl.rows.length} позиций — ${tpl.rows.slice(0,4).map(r=>escQ(r.name)).join(', ')}${tpl.rows.length>4?'…':''}</div>
+        </div>
+        <button class="btn btn-primary btn-sm">Добавить ↗</button>`;
+      div.querySelector('button').onclick = () => applyTemplate(type, i);
+      list.appendChild(div);
+    });
+  }
+  openModal('modalPickTpl');
+}
+
+function applyTemplate(type, idx) {
+  const tpl = S.templates[type][idx];
+  const tbodyId = type === 'sales' ? 'salesBody' : 'purchaseBody';
+  const rows = readTable(tbodyId);
+  tpl.rows.forEach(r => rows.push({name:r.name, price:r.price, markup:r.markup, qty:0}));
+  renderTable(tbodyId, rows, type);
+  saveDayData();
+  closeModal('modalPickTpl');
+}
+
+// ====================== DATE NAV ======================
+function setDayLabel(d) {
+  document.getElementById('dayLabel').textContent =
+    d.toLocaleString('ru', {weekday:'long', day:'numeric', month:'long'});
+}
+function prevDay() {
+  const d = new Date(getDayStr()+'T00:00:00'); d.setDate(d.getDate()-1);
+  document.getElementById('currentDate').value = dateFmt(d); setDayLabel(d); loadDayData();
+}
+function nextDay() {
+  const d = new Date(getDayStr()+'T00:00:00'); d.setDate(d.getDate()+1);
+  document.getElementById('currentDate').value = dateFmt(d); setDayLabel(d); loadDayData();
+}
+
+// ====================== MODALS ======================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m =>
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+// ====================== EXCEL EXPORT ======================
+function exportToExcel() {
+  const mo = getMonth(), moData = S.data[mo]||{};
+  const [yr,mnth] = mo.split('-');
+  const moLabel = new Date(yr,mnth-1,1).toLocaleString('ru',{month:'long',year:'numeric'});
+  const wb = XLSX.utils.book_new();
+
+  // Summary sheet
+  const stats = S.drivers.map((name,di) => {
+    let days=0,bought=0,exch=0,salesT=0,purchaseT=0,drvExp=0,miscExp=0,salary=0;
+    Object.values(moData).forEach(dayObj => {
+      const r = dayObj[di]; if (!r) return;
+      const st=(r.sales||[]).reduce((s,p)=>s+(p.price+p.markup)*p.qty,0);
+      const pt=(r.purchase||[]).reduce((s,p)=>s+(p.price+p.markup)*p.qty,0);
+      if (st>0||(r.bottlesBought||0)>0) days++;
+      bought+=r.bottlesBought||0; exch+=r.bottlesExchanged||0;
+      salesT+=st; purchaseT+=pt;
+      drvExp+=(r.driverExp||[]).reduce((s,e)=>s+e.amount,0);
+      miscExp+=(r.miscExp||[]).reduce((s,e)=>s+e.amount,0);
+      salary+=st*(r.salaryPct||10)/100;
+    });
+    return [name,days,bought,exch,Math.round(salesT),Math.round(purchaseT),
+            Math.round(drvExp),Math.round(miscExp),Math.round(salary),
+            Math.round(salesT-purchaseT-salary-drvExp-miscExp)];
+  });
+
+  const wsSum = XLSX.utils.aoa_to_sheet([
+    [`Сводная таблица — ${moLabel}`],[],
+    ['Водитель','Дней','Куплено','Обменяно','Продажи (₽)','Закупка (₽)',
+     'Расх.вод. (₽)','Непредвид. (₽)','ЗП (₽)','Прибыль (₽)'],
+    ...stats
+  ]);
+  wsSum['!cols'] = Array(10).fill({wch:16});
+  XLSX.utils.book_append_sheet(wb, wsSum, 'Сводная');
+
+  S.drivers.forEach((driverName, di) => {
+    const rows = [[`${driverName} — ${moLabel}`],[],
+      ['Дата','Куплено бут.','Обменяно бут.','% ЗП','Тип','Наименование','Цена (₽)','Наценка (₽)','Кол-во','Сумма (₽)']];
+    Object.keys(moData).sort().forEach(dd => {
+      const rec = moData[dd]?.[di]; if (!rec) return;
+      const dateStr = `${yr}-${mnth}-${dd}`;
+      const base = [dateStr, rec.bottlesBought||0, rec.bottlesExchanged||0, (rec.salaryPct||10)+'%'];
+      (rec.sales||[]).forEach(p => rows.push([...base,'Продажа',p.name,p.price,p.markup,p.qty,Math.round((p.price+p.markup)*p.qty)]));
+      (rec.purchase||[]).forEach(p => rows.push([...base,'Закупка',p.name,p.price,p.markup,p.qty,Math.round((p.price+p.markup)*p.qty)]));
+      (rec.driverExp||[]).filter(e=>e.amount).forEach(e => rows.push([...base,'Расход вод.',e.name,'','','',e.amount]));
+      (rec.miscExp||[]).filter(e=>e.amount).forEach(e => rows.push([...base,'Непредвид.',e.name,'','','',e.amount]));
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = Array(10).fill({wch:15});
+    XLSX.utils.book_append_sheet(wb, ws, driverName.substring(0,30));
+  });
+
+  XLSX.writeFile(wb, `Учёт_воды_${mo}.xlsx`);
+}
+
+fillMonthSelect();
+init();
+</script>
+
+</body>
+</html>
